@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USUARIOS ──────────────────────────────────────────────────────────────
+
+model Usuario {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  nombre        String
+  avatarUrl     String?
+  idioma        String    @default("es")   // KT-19 i18n
+  creadoEn      DateTime  @default(now())
+  actualizadoEn DateTime  @updatedAt
+
+  // Relaciones
+  rutas         Ruta[]
+  visitas       Visita[]
+  logros        UsuarioLogro[]
+  resenas       Resena[]
+  misiones      UsuarioMision[]
+  cupones       UsuarioCupon[]
+  perfil        Perfil?
+
+  @@map("usuarios")
+}
+
+model Perfil {
+  id          String   @id @default(cuid())
+  usuarioId   String   @unique
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  bio         String?
+  ciudad      String?
+  totalVisitas Int     @default(0)
+  puntosTotal Int      @default(0)
+  nivel       Int      @default(1)
+
+  @@map("perfiles")
+}
+
+// ─── POIs ──────────────────────────────────────────────────────────────────
+
+model POI {
+  id          String   @id @default(cuid())
+  nombre      String
+  descripcion String
+  latitud     Float
+  longitud    Float
+  radioMetros Float    @default(50)    // Radio del geofence
+  audioUrl    String?                  // KT-07 y KT-10
+  videoUrl    String?                  // KT-10 contenido educativo
+  imageUrl    String?
+  qrCode      String?  @unique         // KT-11 escaneo QR
+  categoria   String   @default("general")
+  activo      Boolean  @default(true)
+  locatarioId String?                  // KT-17 registro locatarios
+  locatario   Locatario? @relation(fields: [locatarioId], references: [id])
+  creadoEn    DateTime @default(now())
+
+  // Relaciones
+  visitas     Visita[]
+  resenas     Resena[]
+  rutaPOIs    RutaPOI[]
+  misiones    Mision[]
+
+  @@map("pois")
+}
+
+// ─── RUTAS ─────────────────────────────────────────────────────────────────
+
+model Ruta {
+  id          String    @id @default(cuid())
+  nombre      String
+  descripcion String?
+  usuarioId   String
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id])
+  tipo        TipoRuta  @default(LIBRE)   // KT-06
+  estado      EstadoRuta @default(PENDIENTE)
+  iniciadaEn  DateTime?
+  completadaEn DateTime?
+  creadoEn    DateTime  @default(now())
+
+  pois        RutaPOI[]
+
+  @@map("rutas")
+}
+
+model RutaPOI {
+  id      String @id @default(cuid())
+  rutaId  String
+  poiId   String
+  orden   Int
+  ruta    Ruta   @relation(fields: [rutaId], references: [id])
+  poi     POI    @relation(fields: [poiId], references: [id])
+
+  @@unique([rutaId, orden])
+  @@map("ruta_pois")
+}
+
+enum TipoRuta {
+  LIBRE
+  GUIADA
+  TEMATICA
+}
+
+enum EstadoRuta {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADA
+  CANCELADA
+}
+
+// ─── VISITAS (geofencing trigger) ──────────────────────────────────────────
+
+model Visita {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  poiId       String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  poi         POI      @relation(fields: [poiId], references: [id])
+  visitadaEn  DateTime @default(now())
+  duracionSeg Int?     // cuánto tiempo estuvo en el POI
+
+  @@map("visitas")
+}
+
+// ─── AUDIO (KT-07 y KT-10) ─────────────────────────────────────────────────
+
+model AudioTrack {
+  id        String  @id @default(cuid())
+  poiId     String  @unique
+  url       String                        // URL en S3/R2
+  duracionSeg Int
+  idioma    String  @default("es")
+  creadoEn  DateTime @default(now())
+
+  @@map("audio_tracks")
+}
+
+// ─── CUPONES (KT-12) ───────────────────────────────────────────────────────
+
+model Cupon {
+  id           String   @id @default(cuid())
+  codigo       String   @unique
+  descripcion  String
+  descuento    Float                       // porcentaje 0-100
+  tipo         TipoCupon
+  locatarioId  String?
+  locatario    Locatario? @relation(fields: [locatarioId], references: [id])
+  validoHasta  DateTime
+  usoMaximo    Int      @default(1)
+  creadoEn     DateTime @default(now())
+
+  usos         UsuarioCupon[]
+
+  @@map("cupones")
+}
+
+model UsuarioCupon {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  cuponId    String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  cupon      Cupon    @relation(fields: [cuponId], references: [id])
+  usadoEn    DateTime @default(now())
+
+  @@unique([usuarioId, cuponId])
+  @@map("usuario_cupones")
+}
+
+enum TipoCupon {
+  DESCUENTO
+  REGALO
+  ACCESO_VIP
+}
+
+// ─── MISIONES (KT-13) ──────────────────────────────────────────────────────
+
+model Mision {
+  id          String      @id @default(cuid())
+  nombre      String
+  descripcion String
+  tipo        TipoMision
+  poiId       String?                     // POI requerido para completar
+  poi         POI?        @relation(fields: [poiId], references: [id])
+  puntosRecompensa Int    @default(100)
+  activa      Boolean     @default(true)
+
+  progresos   UsuarioMision[]
+
+  @@map("misiones")
+}
+
+model UsuarioMision {
+  id          String       @id @default(cuid())
+  usuarioId   String
+  misionId    String
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id])
+  mision      Mision       @relation(fields: [misionId], references: [id])
+  estado      EstadoMision @default(EN_PROGRESO)
+  completadaEn DateTime?
+
+  @@unique([usuarioId, misionId])
+  @@map("usuario_misiones")
+}
+
+enum TipoMision {
+  VISITAR_POI
+  COMPLETAR_RUTA
+  ESCANEAR_QR
+  COLECCIONAR_LOGROS
+}
+
+enum EstadoMision {
+  EN_PROGRESO
+  COMPLETADA
+  EXPIRADA
+}
+
+// ─── LOGROS (KT-14) ────────────────────────────────────────────────────────
+
+model Logro {
+  id          String  @id @default(cuid())
+  nombre      String
+  descripcion String
+  iconoUrl    String?
+  criterio    String  // ej: "visitar_5_pois", "completar_ruta"
+  puntos      Int     @default(50)
+
+  usuarios    UsuarioLogro[]
+
+  @@map("logros")
+}
+
+model UsuarioLogro {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  logroId    String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  logro      Logro    @relation(fields: [logroId], references: [id])
+  obtenidoEn DateTime @default(now())
+
+  @@unique([usuarioId, logroId])
+  @@map("usuario_logros")
+}
+
+// ─── RESEÑAS (KT-16) ───────────────────────────────────────────────────────
+
+model Resena {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  poiId       String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  poi         POI      @relation(fields: [poiId], references: [id])
+  calificacion Int                         // 1-5
+  comentario  String?
+  creadoEn    DateTime @default(now())
+
+  @@unique([usuarioId, poiId])
+  @@map("resenas")
+}
+
+// ─── LOCATARIOS (KT-17 y KT-18) ───────────────────────────────────────────
+
+model Locatario {
+  id          String   @id @default(cuid())
+  nombre      String
+  email       String   @unique
+  passwordHash String
+  negocio     String
+  plan        PlanB2B  @default(BASICO)   // KT-18
+  activo      Boolean  @default(true)
+  creadoEn    DateTime @default(now())
+
+  pois        POI[]
+  cupones     Cupon[]
+
+  @@map("locatarios")
+}
+
+enum PlanB2B {
+  BASICO      // 1 POI, sin cupones
+  PRO         // 5 POIs, cupones ilimitados
+  ENTERPRISE  // POIs ilimitados, analytics
+}
