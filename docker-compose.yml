@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   api:
     build: .
@@ -12,9 +11,10 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
-
   db:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"          # ← AGREGAR ESTA LÍNEA
     environment:
       POSTGRES_DB: cooltour
       POSTGRES_USER: postgres
@@ -27,6 +27,5 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-
 volumes:
   postgres_data:
