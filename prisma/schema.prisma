@@ -26,6 +26,7 @@ model Usuario {
   resenas       Resena[]
   misiones      UsuarioMision[]
   cupones       UsuarioCupon[]
+  rutasActivas  UsuarioRutaActiva[]
   perfil        Perfil?
 
   @@map("usuarios")
@@ -78,15 +79,22 @@ model Ruta {
   id          String    @id @default(cuid())
   nombre      String
   descripcion String?
-  usuarioId   String
-  usuario     Usuario   @relation(fields: [usuarioId], references: [id])
-  tipo        TipoRuta  @default(LIBRE)   // KT-06
+  usuarioId   String?                          // ← antes era obligatorio, ahora opcional
+  usuario     Usuario?  @relation(fields: [usuarioId], references: [id])  // ← opcional también
+  tipo        TipoRuta  @default(LIBRE)
   estado      EstadoRuta @default(PENDIENTE)
   iniciadaEn  DateTime?
   completadaEn DateTime?
   creadoEn    DateTime  @default(now())
 
+  // ← Nuevos campos para el listado "Explorar Rutas"
+  resumenCorto      String?
+  tiempoEstimadoMin Int?
+  dificultad        String?  @default("facil")
+  imagenPortada     String?
+
   pois        RutaPOI[]
+  seguidores    UsuarioRutaActiva[]
 
   @@map("rutas")
 }
@@ -115,6 +123,22 @@ enum EstadoRuta {
   COMPLETADA
   CANCELADA
 }
+
+model UsuarioRutaActiva {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  rutaId      String
+  estado      EstadoRuta @default(EN_PROGRESO)
+  iniciadaEn  DateTime @default(now())
+  completadaEn DateTime?
+
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  ruta        Ruta     @relation(fields: [rutaId], references: [id])
+
+  @@unique([usuarioId, rutaId])
+  @@map("usuario_rutas_activas")
+}
+
 
 // ─── VISITAS (geofencing trigger) ──────────────────────────────────────────
 

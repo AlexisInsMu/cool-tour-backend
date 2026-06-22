@@ -5,6 +5,7 @@ import { authRoutes } from './modules/auth/auth.routes'
 import { poisRoutes } from './modules/pois/pois.routes'
 import { rutasRoutes } from './modules/rutas/rutas.routes'
 import { cuponesRoutes } from './modules/cupones/cupones.routes'
+import { locatariosRoutes } from './modules/locatarios/locatarios.routes'   // ⭐ NUEVO
 
 export async function app(fastify: FastifyInstance) {
   // Plugins globales
@@ -14,6 +15,7 @@ export async function app(fastify: FastifyInstance) {
   // Rutas públicas
   fastify.register(authRoutes, { prefix: '/api/auth' })
   fastify.register(poisRoutes, { prefix: '/api/pois' })
+  fastify.register(locatariosRoutes, { prefix: '/api/locatarios' })   // ⭐ NUEVO
 
   // Rutas protegidas (requieren JWT)
   fastify.register(rutasRoutes, { prefix: '/api/rutas' })
